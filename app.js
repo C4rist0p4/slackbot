@@ -21,64 +21,91 @@ exports.handler = (event, context, callback) => {
 const processRequest = (body, callback) => {
         switch (body.event.type) { 
             case "app_mention": processAppMention(body, callback); break;
-            case "app_home_opened'": welcomeMessage(body, callback); break; //Todo: test welecome Function 
+            case "app_home_opened": welcomeMessage(body, callback); break;
             default: callback(null);
         }
     };
 
 const welcomeMessage = (body, callback) => {
-    console.debug("welcome Message", "okay");
-    let blocks = [
+    console.debug("welcomeMessage", "started");
+    let blocks = {
+        type: 'modal',
+        title: {
+          type: 'plain_text',
+          text: 'Create a stickie note'
+        },
+        submit: {
+          type: 'plain_text',
+          text: 'Create'
+        },
+        blocks: [
+          // Text input
           {
-            "type": "section",
-            "text": {
-              "type": "mrkdwn",
-              "text": "*Welcome to your _App's Home_* :tada:"
+            "type": "input",
+            "block_id": "note01",
+            "label": {
+              "type": "plain_text",
+              "text": "Note"
+            },
+            "element": {
+              "action_id": "content",
+              "type": "plain_text_input",
+              "placeholder": {
+                "type": "plain_text",
+                "text": "Take a note... "
+              },
+              "multiline": true
             }
           },
+          
+          // Drop-down menu      
           {
-            "type": "divider"
-          },
-          {
-            "type": "section",
-            "text": {
-              "type": "mrkdwn",
-              "text": "This button won't do much for now."
-            }
-          },
-          {
-            "type": "actions",
-            "elements": [
-              {
-                "type": "button",
-                "text": {
-                  "type": "plain_text",
-                  "text": "Click me!"
+            "type": "input",
+            "block_id": "note02",
+            "label": {
+              "type": "plain_text",
+              "text": "Color",
+            },
+            "element": {
+              "type": "static_select",
+              "action_id": "color",
+              "options": [
+                {
+                  "text": {
+                    "type": "plain_text",
+                    "text": "yellow"
+                  },
+                  "value": "yellow"
+                },
+                {
+                  "text": {
+                    "type": "plain_text",
+                    "text": "blue"
+                  },
+                  "value": "blue"
                 }
-              }
-            ]
+              ]
+            }
           }
-        
-        ];
+        ]
+      };
 
-        const message = {
-            channel: body.event.channel,
-            blocks: blocks
-            };
+    const message = {
+        channel: body.event.channel,
+        view: blocks
+    };
       
-    
-
     axios({
         method: 'post',
         url: 'https://slack.com/api/chat.postMessage',
         headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${token}` },
-        blocks: message
+        data: message
     }).then((response) => { 
         callback(null);
     }).catch((error) => {
         callback("failed to process app_mention");
     }); 
-}
+};
 
 const processAppMention = (body, callback) => {
 
@@ -89,8 +116,10 @@ const processAppMention = (body, callback) => {
         getTodos(body, callback);
     } else if(text.slice(0,10) == "add todos:") {
         saveItem(body, callback);
-    } else if(text.slice(0,12) == "delete todo:") {
-        deleteItem(body, callback);
+    } else if(text.slice(0,6) == "thanks") {
+        setPoints(body, callback);
+    } else if(text.slice(0,11) == "show points") {
+        showPointsList(body, callback);
     };     
 };
 
@@ -132,7 +161,7 @@ const getTodos = (body, callback) => {
         }); 
         }
     });
-}
+};
 
 const saveItem = (body, callback) => {
     
@@ -162,32 +191,124 @@ const saveItem = (body, callback) => {
                 });
         }
     });
+};
 
-}
 
-const deleteItem = (body, callback) => {
-    let item = body.event.text.split(':').pop().trim();
-    db.deleteItem(item, (error, result) => {
+const setPoints = (body, callback) => {
+
+    let words = body.event.text.split('/thanks');
+    words = words[1].split('for:');
+
+    objson = JSON.parse('{"itemkey": "", "name": "", "points": ""}');
+    objson["itemkey"] = words[1].replace(/\s/g, '');
+    objson["name"] = words[0].replace(/\s/g, '');
+     
+    getItemFromTodos(objson, getPointsFromList);
+
+    const message = {
+        channel: body.event.channel,
+        text: `\`${objson["name"]}\` get points.`
+    };
+
+    axios({
+        method: 'post',
+        url: 'https://slack.com/api/chat.postMessage',
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${token}` },
+        data: message
+    })
+    .then((response) => {
+            callback(null);
+        })
+        .catch((error) => {
+            callback("failed to process app_mention");
+        });
+};
+
+const getItemFromTodos = (objson, callback) => {
+    db.getItemTodos(objson, (error, result) => {
         if (error !== null) {
             callback(error);
         } else {
-            const message = {
-                channel: body.event.channel,
-                text: `Item \`${item}\` deleted from *Todo list*!`
-            };
-            axios({
-                method: 'post',
-                url: 'https://slack.com/api/chat.postMessage',
-                headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${token}` },
-                data: message
-            })
-            .then((response) => {
-                    callback(null);
-                })
-                .catch((error) => {
-                    callback("failed to process app_mention");
-                });
+            let jsonStr = JSON.stringify(result); 
+            let jdata = JSON.parse(jsonStr);
+
+            objson["points"] = jdata["Item"]["points"];
+            
+            callback(objson, setPointsList);
         }
     });
+};
 
-}
+const getPointsFromList = (objson, callback) => { 
+    db.getPoints(objson, (error, result) => {
+        let jsonStr = JSON.stringify(result); 
+        let jdata = JSON.parse(jsonStr);
+       
+        if (Object.keys(jdata).length == 0) {
+            callback(objson, deleteItem);
+        } else {
+            let num = parseInt(objson["points"]) + parseInt(jdata["Item"]["points"])
+            objson["points"] = num.toString();
+
+            callback(objson, deleteItem);
+        }
+    });
+};
+
+const setPointsList = (jdata, callback) => {
+    db.savePoints(jdata["name"], jdata["points"], (error, result) => { 
+        if (error !== null) {
+            callback(error);
+        } else {
+            callback(jdata ,null);
+        }
+    });  
+};
+
+const showPointsList = (body, callback) => {
+    db.getPointsList((error, result) => {
+        if (error !== null) {
+            callback(error);
+        } else {
+       
+        let blocks = [];
+
+        for (let i = 0; i < result.Items.length; i++) {
+            blocks.push({
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "plain_text",
+                        "text": `${result.Items[i].name.S}  Punkte: ${result.Items[i].points.S}` ,
+                        "emoji": true
+                    }
+                ]
+            })
+        }
+        
+        const message = {
+        channel: body.event.channel,
+        blocks: blocks
+        };
+
+        axios({
+            method: 'post',
+            url: 'https://slack.com/api/chat.postMessage',
+            headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${token}` },
+            data: message
+        }).then((response) => { 
+            callback(null);
+        }).catch((error) => {
+            callback("failed to process app_mention");
+        }); 
+        }
+    });
+};
+
+const deleteItem = (jdata, callback) => {
+    db.deleteItem(jdata["itemkey"], (error, result) => {
+        if (error !== null) {
+            callback(error);
+        } 
+    });
+};
