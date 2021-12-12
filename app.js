@@ -27,8 +27,7 @@ const processRequest = (body, callback) => {
     };
 
 const welcomeMessage = (body, callback) => {
-    console.debug("welcomeMessage", "started");
-    let blocks = {
+    let blocks = [{
         type: 'modal',
         title: {
           type: 'plain_text',
@@ -88,7 +87,7 @@ const welcomeMessage = (body, callback) => {
             }
           }
         ]
-      };
+      }];
 
     const message = {
         channel: body.event.channel,
@@ -120,6 +119,8 @@ const processAppMention = (body, callback) => {
         setPoints(body, callback);
     } else if(text.slice(0,11) == "show points") {
         showPointsList(body, callback);
+    } else if(text.slice(0,4) == "help") {
+        showhelp(body, callback);
     };     
 };
 
@@ -311,4 +312,34 @@ const deleteItem = (jdata, callback) => {
             callback(error);
         } 
     });
+};
+
+const showhelp = (body, callback) => {
+       
+    let blocks = [{
+        "type": "image",
+        "title": {
+          "type": "plain_text",
+          "text": "Please enjoy the photo of the help"
+        },
+        "block_id": "image4",
+        "image_url": "http://placekitten.com/500/500",
+        "alt_text": "An incredibly help"
+    } ]
+    
+    const message = {
+    channel: body.event.channel,
+    blocks: blocks
+    };
+
+    axios({
+        method: 'post',
+        url: 'https://slack.com/api/chat.postMessage',
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${token}` },
+        data: message
+    }).then((response) => { 
+        callback(null);
+    }).catch((error) => {
+        callback("failed to process app_mention");
+    });   
 };
