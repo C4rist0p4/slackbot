@@ -44,9 +44,7 @@ exports.savePoints = (item, points, callback) => {
 exports.getPoints = async (item, callback) => {
     var params = {
         TableName: 'points',
-        Key:{
-            "name": item['name'],
-        }
+        Key:{ "name": item['name'],}
     };
     
     docClient.get(params, function(err, data) {
@@ -58,6 +56,7 @@ exports.getPoints = async (item, callback) => {
         }
     });
 };
+
 
 exports.getPointsList = async (callback) => {
     const params = {
