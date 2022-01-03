@@ -1,10 +1,11 @@
 const axios = require('axios');
 const security = require('./security');
-
 const db = require('./db');
 
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
 const token = process.env.SLACK_BOT_TOKEN;
+
+const rewardsData = {"Kaffee": 1, "Tee": 2, "Pizza": 3}
 
 exports.handler = (event, context, callback) => {
         if (security.validateSlackRequest(event, signingSecret)) {
@@ -27,8 +28,7 @@ const processRequest = (body, callback) => {
     };
 
 const welcomeMessage = (body, callback) => {
-    console.debug("welcomeMessage", "started");
-    let blocks = {
+    let blocks = [{
         type: 'modal',
         title: {
           type: 'plain_text',
@@ -88,7 +88,7 @@ const welcomeMessage = (body, callback) => {
             }
           }
         ]
-      };
+      }];
 
     const message = {
         channel: body.event.channel,
@@ -112,15 +112,53 @@ const processAppMention = (body, callback) => {
     let text = body.event.text.split("/").pop().trim();
     text = text.toLowerCase();
 
-    if(text.slice(0,9) == "get todos") {
+    if(text.slice(0,4) == "task") {
         getTodos(body, callback);
     } else if(text.slice(0,10) == "add todos:") {
         saveItem(body, callback);
     } else if(text.slice(0,6) == "thanks") {
         setPoints(body, callback);
-    } else if(text.slice(0,11) == "show points") {
+    } else if(text.slice(0,7) == "ranking") {
         showPointsList(body, callback);
+    } else if(text.slice(0,4) == "help") {
+        showhelp(body, callback);
+    }else if(text.slice(0,7) == "rewards") {
+        getRewards(body, callback);
+    }else if(text.slice(0,3) == "buy") {
+        buyReward(body, callback);
     };     
+};
+
+const getRewards = (body, callback) => {   
+    let blocks = [];
+    for (const key in rewardsData) {
+        blocks.push({
+            "type": "context",
+            "elements": [
+                {
+                    "type": "plain_text",
+                    "text": `Reward: ${key}  Punkte: ${rewardsData[key]}` ,
+                    "emoji": true
+                }
+            ]
+        })
+    }
+    
+    const message = {
+    channel: body.event.channel,
+    blocks: blocks
+    };
+
+    axios({
+        method: 'post',
+        url: 'https://slack.com/api/chat.postMessage',
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${token}` },
+        data: message
+    }).then((response) => { 
+        callback(null);
+    }).catch((error) => {
+        callback("failed to process app_mention");
+    }); 
 };
 
 const getTodos = (body, callback) => {
@@ -201,13 +239,13 @@ const setPoints = (body, callback) => {
 
     objson = JSON.parse('{"itemkey": "", "name": "", "points": ""}');
     objson["itemkey"] = words[1].replace(/\s/g, '');
-    objson["name"] = words[0].replace(/\s/g, '');
+    objson["name"] = words[0].replace(/\s*\@*\<*\>*/g, '');
      
     getItemFromTodos(objson, getPointsFromList);
 
     const message = {
         channel: body.event.channel,
-        text: `\`${objson["name"]}\` get points.`
+        text: `\`<@${objson["name"]}>\` get points.`
     };
 
     axios({
@@ -226,14 +264,15 @@ const setPoints = (body, callback) => {
 
 const getItemFromTodos = (objson, callback) => {
     db.getItemTodos(objson, (error, result) => {
-        if (error !== null) {
+       
+        if (result == {}) {
             callback(error);
         } else {
+    
             let jsonStr = JSON.stringify(result); 
             let jdata = JSON.parse(jsonStr);
-
+            console.log("jdata", jdata);
             objson["points"] = jdata["Item"]["points"];
-            
             callback(objson, setPointsList);
         }
     });
@@ -252,6 +291,24 @@ const getPointsFromList = (objson, callback) => {
 
             callback(objson, deleteItem);
         }
+    });
+};
+
+const buyReward = (body, callback) => { 
+    let words = body.event.text.split('/buy');
+    let objson = JSON.parse('{"name": ""}');
+    objson["name"] = body.event.user;
+    objson["reward"] = words[1].replace(/\s/g, '');
+
+   db.getPoints(objson, (error, result) => {
+        let jsonStr = result;
+
+        console.log("new Points",  parseInt(jsonStr["Item"]["points"]) - parseInt(rewardsData[objson["reward"]]));
+        //vergleichen
+        //Wenn >= 0 dann Neune 
+            //punkte eintragen 
+            //Antworten mit reward gekauft 
+        //Wenn nicht antworten nicht genug punkte vorhanden
     });
 };
 
@@ -275,16 +332,15 @@ const showPointsList = (body, callback) => {
 
         for (let i = 0; i < result.Items.length; i++) {
             blocks.push({
-                "type": "context",
-                "elements": [
-                    {
-                        "type": "plain_text",
-                        "text": `${result.Items[i].name.S}  Punkte: ${result.Items[i].points.S}` ,
-                        "emoji": true
-                    }
-                ]
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": `<@${result.Items[i].name.S}>  Punkte: ${result.Items[i].points.S}` 
+                }
             })
         }
+
+        console.log("block", blocks);
         
         const message = {
         channel: body.event.channel,
@@ -311,4 +367,34 @@ const deleteItem = (jdata, callback) => {
             callback(error);
         } 
     });
+};
+
+const showhelp = (body, callback) => {
+       
+    let blocks = [{
+        "type": "image",
+        "title": {
+          "type": "plain_text",
+          "text": "Please enjoy the photo of the help"
+        },
+        "block_id": "image4",
+        "image_url": "http://placekitten.com/500/500",
+        "alt_text": "An incredibly help"
+    } ]
+    
+    const message = {
+    channel: body.event.channel,
+    blocks: blocks
+    };
+
+    axios({
+        method: 'post',
+        url: 'https://slack.com/api/chat.postMessage',
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${token}` },
+        data: message
+    }).then((response) => { 
+        callback(null);
+    }).catch((error) => {
+        callback("failed to process app_mention");
+    });   
 };
