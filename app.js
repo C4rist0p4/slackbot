@@ -28,17 +28,7 @@ const processRequest = (body, callback) => {
     };
 
 const welcomeMessage = (body, callback) => {
-    let blocks = [{
-        type: 'modal',
-        title: {
-          type: 'plain_text',
-          text: 'Create a stickie note'
-        },
-        submit: {
-          type: 'plain_text',
-          text: 'Create'
-        },
-        blocks: [
+    let blocks = [
           // Text input
           {
             "type": "input",
@@ -87,8 +77,7 @@ const welcomeMessage = (body, callback) => {
               ]
             }
           }
-        ]
-      }];
+        ];
 
     const message = {
         channel: body.event.channel,
@@ -126,7 +115,11 @@ const processAppMention = (body, callback) => {
         getRewards(body, callback);
     }else if(text.slice(0,3) == "buy") {
         buyReward(body, callback);
-    };     
+    }else if(text.slice(0,5) == "goals") {
+        showGoals(body, callback);
+    }  
+    //ponits 
+    //rules  
 };
 
 const getRewards = (body, callback) => {   
@@ -203,7 +196,7 @@ const getTodos = (body, callback) => {
 
 const saveItem = (body, callback) => {
     
-    let words = body.event.text.split('p:');
+    let words = body.event.text.split('points:');
     let points = words[1];
     let item = words[0].split(':').pop().trim();
     
@@ -231,7 +224,6 @@ const saveItem = (body, callback) => {
     });
 };
 
-
 const setPoints = (body, callback) => {
 
     let words = body.event.text.split('/thanks');
@@ -240,7 +232,7 @@ const setPoints = (body, callback) => {
     objson = JSON.parse('{"itemkey": "", "name": "", "points": ""}');
     objson["itemkey"] = words[1].replace(/\s/g, '');
     objson["name"] = words[0].replace(/\s*\@*\<*\>*/g, '');
-     
+
     getItemFromTodos(objson, getPointsFromList);
 
     const message = {
@@ -264,14 +256,12 @@ const setPoints = (body, callback) => {
 
 const getItemFromTodos = (objson, callback) => {
     db.getItemTodos(objson, (error, result) => {
-       
         if (result == {}) {
             callback(error);
         } else {
-    
             let jsonStr = JSON.stringify(result); 
             let jdata = JSON.parse(jsonStr);
-            objson["points"] = jdata["Item"]["points"];
+            objson["points"] = jdata["Item"]["points"];        
             callback(objson, setPointsList);
         }
     });
@@ -350,6 +340,10 @@ const showPointsList = (body, callback) => {
         } else {
        
         let blocks = [];
+       
+        result.Items.sort(function (a, b) {
+            return b.points.S.localeCompare(a.points.S);
+        });
 
         for (let i = 0; i < result.Items.length; i++) {
             blocks.push({
@@ -388,18 +382,142 @@ const deleteItem = (jdata, callback) => {
     });
 };
 
-const showhelp = (body, callback) => {
-       
-    let blocks = [{
-        "type": "image",
-        "title": {
-          "type": "plain_text",
-          "text": "Please enjoy the photo of the help"
-        },
-        "block_id": "image4",
-        "image_url": "http://placekitten.com/500/500",
-        "alt_text": "An incredibly help"
-    } ]
+const showhelp = (body, callback) => {  
+    let blocks = [
+        {
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ":white_check_mark:  */goals* \t\t\t See company goals"
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ":page_with_curl: */task*  \t\t\t   The current karma task list"
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ":trophy: */ranking* \t\t  Current leaderboard of persons"
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ":chart_with_upwards_trend: */ponits* \t\t\t Your toatal collected karma points"
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ":gift: */rewards* \t\t  Rewards that can be purchased with the karma points"
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ":speech_balloon: */rules* \t\t\t   Informations, how to be get karma points"
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ":innocent: */help* \t\t\t\tOverview of bot-commands"
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ":clap: */thanks* \t\t\tExampel: /thanks *@Username* for: *Taskname*"
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ":muscle: */add todos:* \t  Add a Task to the list. \n\t\t\t\t\t\t\t\t Exampel: /add todos: *Taskename* points: *Number of Points*"
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ":credit_card: */buy* \t\t\t     Buying some Rewards. Exampel: /buy *Reward Name*"
+			}
+		}
+    ]
+    
+    const message = {
+    channel: body.event.channel,
+    blocks: blocks
+    };
+
+    axios({
+        method: 'post',
+        url: 'https://slack.com/api/chat.postMessage',
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${token}` },
+        data: message
+    }).then((response) => { 
+        callback(null);
+    }).catch((error) => {
+        callback("failed to process app_mention");
+    });   
+};
+
+const showGoals = (body, callback) => {  
+    let blocks = [
+        {
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "You're looking forward to your morning coffee at the office, but notice that the coffee machines haven't been cleaned in weeks?😐 You're looking forward to a coffee in the office and then notice that it smells like rotten banana everywhere because the trash can hasn't been emptied?😶 You don't have much time for an upcoming meeting and are annoyed that all your colleagues are there 10 minutes later?🤐 "
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "To solve these annoying but easily avoidable problems, there's our Karma Slack app! 🎯🔥  "
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "Karma: You can earn Karma points for completing pre-set Karma tasks. Each team can create its own tasks. But what is Karma good for? The principle behind it is this: 'Do good and good will come to you.' 🍀 \nYou can also get Karma points by communicating kindly and productively with your colleagues, which triggers our bot. "
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "Rewards: With us, however, you'll definitely get something back if you've accumulated a lot of karma points, because you can buy great rewards (like a free coffee) with your current karma score.🎁 "
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "Team-Work: By completing the Karma-tasks you have more fun at work, you spur each other on, support each other and thereby the cohesion with your colleagues increases.💪🤝 "
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "Constant optimization: By documenting completed Karma tasks, you can always see what is going well at work and where there is still potential for optimization.🤓📈"
+			}
+		}
+    ]
     
     const message = {
     channel: body.event.channel,
