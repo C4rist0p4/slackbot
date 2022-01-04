@@ -271,7 +271,6 @@ const getItemFromTodos = (objson, callback) => {
     
             let jsonStr = JSON.stringify(result); 
             let jdata = JSON.parse(jsonStr);
-            console.log("jdata", jdata);
             objson["points"] = jdata["Item"]["points"];
             callback(objson, setPointsList);
         }
@@ -297,18 +296,40 @@ const getPointsFromList = (objson, callback) => {
 const buyReward = (body, callback) => { 
     let words = body.event.text.split('/buy');
     let objson = JSON.parse('{"name": ""}');
+    let answer = "Nicht genug Punkte :(";
     objson["name"] = body.event.user;
     objson["reward"] = words[1].replace(/\s/g, '');
 
    db.getPoints(objson, (error, result) => {
         let jsonStr = result;
-
-        console.log("new Points",  parseInt(jsonStr["Item"]["points"]) - parseInt(rewardsData[objson["reward"]]));
-        //vergleichen
-        //Wenn >= 0 dann Neune 
-            //punkte eintragen 
-            //Antworten mit reward gekauft 
-        //Wenn nicht antworten nicht genug punkte vorhanden
+        let newPoints = parseInt(jsonStr["Item"]["points"]) - parseInt(rewardsData[objson["reward"]]);
+        if (newPoints >= 0) {
+            db.savePoints(objson["name"], newPoints.toString(), (error, result) => { 
+                if (error !== null) {
+                    callback(error);
+                } else {
+                    callback(null);
+                }
+            });  
+            answer = `${objson["reward"]} gekauft!!` 
+        } 
+            
+        const message = {
+            channel: body.event.channel,
+            text: answer
+        };
+        axios({
+            method: 'post',
+            url: 'https://slack.com/api/chat.postMessage',
+            headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${token}` },
+            data: message
+        })
+        .then((response) => {
+                callback(null);
+            })
+            .catch((error) => {
+                callback("failed to process app_mention");
+            });
     });
 };
 
@@ -339,9 +360,7 @@ const showPointsList = (body, callback) => {
                 }
             })
         }
-
-        console.log("block", blocks);
-        
+ 
         const message = {
         channel: body.event.channel,
         blocks: blocks
