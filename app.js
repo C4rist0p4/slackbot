@@ -10,6 +10,8 @@ const rewardsData = {"Kaffee": 1, "Tee": 2, "Pizza": 3}
 exports.handler = (event, context, callback) => {
         if (security.validateSlackRequest(event, signingSecret)) {
             const body = JSON.parse(event.body);
+            console.log("body", body);
+            console.log("body.type", body.type);
             switch (body.type) {
                 case "url_verification": callback(null, body.challenge); break;
                 case "event_callback": processRequest(body, callback); break;
@@ -20,6 +22,7 @@ exports.handler = (event, context, callback) => {
     };
     
 const processRequest = (body, callback) => {
+    console.log("processRequest", body);
         switch (body.event.type) { 
             case "app_mention": processAppMention(body, callback); break;
             case "app_home_opened": welcomeMessage(body, callback); break;
@@ -27,66 +30,98 @@ const processRequest = (body, callback) => {
         }
     };
 
+    const processAppMention = (body, callback) => {
+
+        let text = body.event.text.split("/").pop().trim();
+        text = text.toLowerCase();
+    
+        if(text.slice(0,4) == "task") {
+            getTodos(body, callback);
+        }else if(text.slice(0,10) == "add todos:") {
+            saveItem(body, callback);
+        }else if(text.slice(0,6) == "thanks") {
+            setPoints(body, callback);
+        }else if(text.slice(0,7) == "ranking") {
+            showPointsList(body, callback);
+        }else if(text.slice(0,4) == "help") {
+            showhelp(body, callback);
+        }else if(text.slice(0,7) == "rewards") {
+            getRewards(body, callback);
+        }else if(text.slice(0,3) == "buy") {
+            buyReward(body, callback);
+        }else if(text.slice(0,5) == "goals") {
+            showGoals(body, callback);
+        }else if(text.slice(0,6) == "points") {
+            getPoints(body, callback);
+        }else if(text.slice(0,5) == "rules") {
+            getRules(body, callback);
+        }
+    };
+
 const welcomeMessage = (body, callback) => {
-    let blocks = [
-          // Text input
-          {
-            "type": "input",
-            "block_id": "note01",
-            "label": {
-              "type": "plain_text",
-              "text": "Note"
-            },
-            "element": {
-              "action_id": "content",
-              "type": "plain_text_input",
-              "placeholder": {
-                "type": "plain_text",
-                "text": "Take a note... "
-              },
-              "multiline": true
-            }
-          },
-          
-          // Drop-down menu      
-          {
-            "type": "input",
-            "block_id": "note02",
-            "label": {
-              "type": "plain_text",
-              "text": "Color",
-            },
-            "element": {
-              "type": "static_select",
-              "action_id": "color",
-              "options": [
-                {
-                  "text": {
+    let block = [{
+        "type": "header",
+        "text": {
+            "type": "plain_text",
+            "text": "Add Todos to List",
+            "emoji": true
+        }
+    },
+    {
+        "type": "input",
+        "element": {
+            "type": "plain_text_input",
+            "action_id": "plain_text_input-action"
+        },
+        "label": {
+            "type": "plain_text",
+            "text": "Todo",
+            "emoji": true
+        }
+    },
+    {
+        "type": "input",
+        "element": {
+            "type": "plain_text_input",
+            "action_id": "plain_text_input-action"
+        },
+        "label": {
+            "type": "plain_text",
+            "text": "Ponis",
+            "emoji": true
+        }
+    },
+    {
+        "type": "actions",
+        "elements": [
+            {
+                "type": "button",
+                "text": {
                     "type": "plain_text",
-                    "text": "yellow"
-                  },
-                  "value": "yellow"
+                    "text": "Add todo to list",
+                    "emoji": true
                 },
-                {
-                  "text": {
-                    "type": "plain_text",
-                    "text": "blue"
-                  },
-                  "value": "blue"
-                }
-              ]
+                "value": "click_add_todo",
+                "action_id": "actionId-0"
             }
-          }
-        ];
+        ]
+    },
+    {
+        "type": "divider"
+    }
+    ];
 
     const message = {
-        channel: body.event.channel,
-        view: blocks
+        "user_id": body.event.user,
+        view: {
+            type:"home",
+            blocks: block
+        }
     };
       
     axios({
         method: 'post',
-        url: 'https://slack.com/api/chat.postMessage',
+        url: 'https://slack.com/api/views.publish',
         headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${token}` },
         data: message
     }).then((response) => { 
@@ -94,32 +129,6 @@ const welcomeMessage = (body, callback) => {
     }).catch((error) => {
         callback("failed to process app_mention");
     }); 
-};
-
-const processAppMention = (body, callback) => {
-
-    let text = body.event.text.split("/").pop().trim();
-    text = text.toLowerCase();
-
-    if(text.slice(0,4) == "task") {
-        getTodos(body, callback);
-    } else if(text.slice(0,10) == "add todos:") {
-        saveItem(body, callback);
-    } else if(text.slice(0,6) == "thanks") {
-        setPoints(body, callback);
-    } else if(text.slice(0,7) == "ranking") {
-        showPointsList(body, callback);
-    } else if(text.slice(0,4) == "help") {
-        showhelp(body, callback);
-    }else if(text.slice(0,7) == "rewards") {
-        getRewards(body, callback);
-    }else if(text.slice(0,3) == "buy") {
-        buyReward(body, callback);
-    }else if(text.slice(0,5) == "goals") {
-        showGoals(body, callback);
-    }  
-    //ponits 
-    //rules  
 };
 
 const getRewards = (body, callback) => {   
@@ -168,7 +177,7 @@ const getTodos = (body, callback) => {
                 "elements": [
                     {
                         "type": "plain_text",
-                        "text": `Aufagbe: ${result.Items[i].item.S}  Punkte: ${result.Items[i].points.S}` ,
+                        "text": `Task: ${result.Items[i].item.S}  Points: ${result.Items[i].points.S}` ,
                         "emoji": true
                     }
                 ]
@@ -333,6 +342,52 @@ const setPointsList = (jdata, callback) => {
     });  
 };
 
+
+const getRules = (body, callback) => {
+    const message = {
+        channel: body.event.channel,
+        text: `Rules description :)`
+    };
+
+    axios({
+        method: 'post',
+        url: 'https://slack.com/api/chat.postMessage',
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${token}` },
+        data: message
+    }).then((response) => { 
+        callback(null);
+    }).catch((error) => {
+        callback("failed to process app_mention");
+    }); 
+};
+
+const getPoints = (body, callback) => {
+    let objson = JSON.parse('{"name": ""}');
+    objson["name"] = body.event.user;
+    db.getPoints(objson, (error, result) => {
+        if (error !== null) {
+            callback(error);
+        } else {
+            let num = parseInt(result.Item.points);
+            const message = {
+                channel: body.event.channel,
+                text: `You have ${num} Ponits!`
+            };
+
+            axios({
+                method: 'post',
+                url: 'https://slack.com/api/chat.postMessage',
+                headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${token}` },
+                data: message
+            }).then((response) => { 
+                callback(null);
+            }).catch((error) => {
+                callback("failed to process app_mention");
+            }); 
+        }
+    })
+};
+
 const showPointsList = (body, callback) => {
     db.getPointsList((error, result) => {
         if (error !== null) {
@@ -409,7 +464,7 @@ const showhelp = (body, callback) => {
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": ":chart_with_upwards_trend: */ponits* \t\t\t Your toatal collected karma points"
+				"text": ":chart_with_upwards_trend: */points* \t\t\t Your toatal collected karma points"
 			}
 		},
 		{
