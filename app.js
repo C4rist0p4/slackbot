@@ -10,19 +10,18 @@ const rewardsData = {"Kaffee": 1, "Tee": 2, "Pizza": 3}
 exports.handler = (event, context, callback) => {
         if (security.validateSlackRequest(event, signingSecret)) {
             const body = JSON.parse(event.body);
-            console.log("body", body);
-            console.log("body.type", body.type);
             switch (body.type) {
                 case "url_verification": callback(null, body.challenge); break;
                 case "event_callback": processRequest(body, callback); break;
                 default: callback(null);
             }
         }
-        else callback("verification failed");
+        else {
+            callback("verification failed");
+        } 
     };
     
 const processRequest = (body, callback) => {
-    console.log("processRequest", body);
         switch (body.event.type) { 
             case "app_mention": processAppMention(body, callback); break;
             case "app_home_opened": welcomeMessage(body, callback); break;
